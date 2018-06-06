@@ -27,13 +27,13 @@ public class CreateMobiusStripCollider : MonoBehaviour {
         MeshFilter filter = GetComponent<MeshFilter>();
         Mesh mesh = new Mesh();
 
-        Vector3[] vertices = new Vector3[Divisions * 2];
+        int vertCount = (Divisions + 1) * 2;
+        Vector3[] vertices = new Vector3[vertCount];
         int[] triangles = new int[(Divisions * 2) * 3];
-        Vector3[] normals = new Vector3[Divisions * 2];
+        Vector3[] normals = new Vector3[vertCount];
+        Vector2[] uv = new Vector2[vertCount];
 
-        int vertsMod = Divisions * 2 - 1;
-
-        for (int u = 0; u < Divisions; u++)
+        for (int u = 0; u < Divisions + 1; u++)
         {
             for (int v = 0; v < 2; v++)
             {
@@ -46,10 +46,14 @@ public class CreateMobiusStripCollider : MonoBehaviour {
 
                 int vert = (u * 2 + v);
                 vertices[vert] = new Vector3(x, y, z);
+                uv[vert] = new Vector2((float)u / Divisions, v);
 
-                triangles[vert * 3] = (vert + v * 2) % vertsMod;
-                triangles[vert * 3 + 1] = (vert + 1) % vertsMod;
-                triangles[vert * 3 + 2] = (vert + 2 - v * 2) % vertsMod;
+                if (u < Divisions)
+                {
+                    triangles[vert * 3] = vert + v * 2;
+                    triangles[vert * 3 + 1] = vert + 1;
+                    triangles[vert * 3 + 2] = vert + 2 - v * 2;
+                }
             }
         }
 
@@ -58,15 +62,20 @@ public class CreateMobiusStripCollider : MonoBehaviour {
             int vert = i * 2;
             Vector3 current = vertices[vert];
             Vector3 v1 = vertices[vert + 1] - current;
-            Vector3 v2 = vertices[(vert + 2) % vertsMod] - current;
+            Vector3 v2 = vertices[(vert + 2)] - current;
             Vector3 normal = -Vector3.Cross(v1.normalized, v2.normalized);
             normals[vert] = normal;
             normals[vert + 1] = normal;
         }
 
+        Vector3 lastNormal = normals[normals.Length - 3];
+        normals[normals.Length - 2] = lastNormal;
+        normals[normals.Length - 1] = lastNormal;
+
         mesh.vertices = vertices;
         mesh.normals = normals;
         mesh.triangles = triangles;
+        mesh.uv = uv;
         mesh.name = "Mobius Procedural";
         filter.mesh = mesh;
     }
