@@ -12,6 +12,11 @@ public class CreateMobiusStripCollider : MonoBehaviour {
     void Start()
     {
         CreateMesh();
+        MeshCollider collider = GetComponent<MeshCollider>();
+        if (collider != null)
+        {
+            collider.sharedMesh = GetComponent<MeshFilter>().mesh;
+        }
     }
 
     void OnValidate()
@@ -38,7 +43,7 @@ public class CreateMobiusStripCollider : MonoBehaviour {
             for (int v = 0; v < 2; v++)
             {
                 float s = v == 0 ? -HalfWidth : HalfWidth;
-                float t = (float)u / Divisions * Mathf.PI * 2.0f;
+                float t = (float)u / Divisions * Mathf.PI * 4.0f;
                 float radial = MidcircleRadius + s * Mathf.Cos(0.5f * t);
                 float x = radial * Mathf.Cos(t);
                 float z = radial * Mathf.Sin(t);
@@ -63,7 +68,7 @@ public class CreateMobiusStripCollider : MonoBehaviour {
             Vector3 current = vertices[vert];
             Vector3 v1 = vertices[vert + 1] - current;
             Vector3 v2 = vertices[(vert + 2)] - current;
-            Vector3 normal = -Vector3.Cross(v1.normalized, v2.normalized);
+            Vector3 normal = Vector3.Cross(v1, v2);
             normals[vert] = normal;
             normals[vert + 1] = normal;
         }
