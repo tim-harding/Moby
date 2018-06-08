@@ -7,31 +7,41 @@ public class VoxelGrid : MonoBehaviour {
     public int XResolution = 16;
     public int YResolution = 16;
     
-    private bool[] Cells;
+    private Voxel[,] Cells;
     private bool NeedsRedraw = true;
     private MeshFilter filter;
 
     private List<Vector3> vertices = new List<Vector3>();
     private List<Vector3> normals = new List<Vector3>();
-    private List<int> trianglesOn = new List<int>();
-    private List<int> trianglesOff = new List<int>();
+    private List<int> triangles = new List<int>();
 
     void Start()
     {
         filter = GetComponent<MeshFilter>();
-        Cells = new bool[XResolution * YResolution];
+        
+        Cells = new Voxel[XResolution, YResolution];
+        for (int x = 0; x < XResolution; x++)
+        {
+            for (int y = 0; y < YResolution; y++)
+            {
+                Cells[x, y] = new Voxel(false);
+            }
+        }
     }
 
     void Update()
     {
         if (NeedsRedraw)
         {
-            RefreshGrid();
+            Triangulate();
+            NeedsRedraw = false;
         }
     }
 
     public void PaintCircle(Vector2 center, float size, bool mode)
     {
+        Vector2Int halfRes = new Vector2Int(XResolution / 2, YResolution / 2);
+        float squareSize = size * size;
         center += new Vector2(XResolution / 2, YResolution / 2);
         for (int y = (int)(center.y - size),
             yMax = (int)(center.y + size + 1);
@@ -43,15 +53,14 @@ public class VoxelGrid : MonoBehaviour {
                 x < xMax;
                 x++)
             {
-                float xDifference = Mathf.Abs(center.x - x);
-                float yDifference = Mathf.Abs(center.y - y);
-                float distance = xDifference * xDifference + yDifference * yDifference;
-                if (distance < size * size)
+                if (Mathf.Abs(x) < halfRes.x && Mathf.Abs(y) < halfRes.y)
                 {
-                    int index = y * XResolution + x;
-                    if (index < Cells.Length && index > 0)
+                    float xDifference = Mathf.Abs(center.x - x);
+                    float yDifference = Mathf.Abs(center.y - y);
+                    float distance = xDifference * xDifference + yDifference * yDifference;
+                    if (distance < squareSize)
                     {
-                        Cells[index] = mode;
+                        Cells[x + halfRes.x, y + halfRes.y].Mode = mode;
                     }
                 }
             }
@@ -59,60 +68,67 @@ public class VoxelGrid : MonoBehaviour {
         NeedsRedraw = true;
     }
 
-    private void RefreshGrid()
+    private void Triangulate()
     {
-        if (filter == null)
-        {
-            Debug.Log("Filter is null.");
-            return;
-        }
-
         Mesh mesh = new Mesh();
-        mesh.name = "Voxel Preview Mesh";
-        mesh.subMeshCount = 2;
-
-        vertices.Clear();
-        normals.Clear();
-        trianglesOn.Clear();
-        trianglesOff.Clear();
+        mesh.name = "Marching Squares";
 
         for (int x = 0; x < XResolution; x++)
         {
             for (int y = 0; y < YResolution; y++)
             {
-                MakeQuad(new Vector3(x - XResolution / 2, y - YResolution / 2, 0), 0.2f, Cells[y * XResolution + x]);
+                Cells[x, y].ResetIndices();
             }
         }
-        
-        mesh.vertices = vertices.ToArray();
-        mesh.normals = normals.ToArray();
-        mesh.SetTriangles(trianglesOn, 0);
-        mesh.SetTriangles(trianglesOff, 1);
-        filter.mesh = mesh;
 
-        NeedsRedraw = false;
-    }
+        vertices.Clear();
+        normals.Clear();
+        triangles.Clear();
 
-    private void MakeQuad(Vector3 center, float size, bool mode)
-    {
-        vertices.Add(center + new Vector3(-size, -size, 0));
-        vertices.Add(center + new Vector3(-size, size, 0));
-        vertices.Add(center + new Vector3(size, size, 0));
-        vertices.Add(center + new Vector3(size, -size, 0));
-
-        for (int i = 0; i < 4; i++)
+        for (int x = 0; x < XResolution - 1; x++)
         {
-            normals.Add(-Vector3.forward);
+            for (int y = 0; y < YResolution - 1; y++)
+            {
+                Voxel lowerLeft = Cells[x, y];
+                Voxel lowerRight = Cells[x + 1, y];
+                Voxel upperLeft = Cells[x, y + 1];
+                Voxel upperRight = Cells[x + 1, y + 1];
+                
+                int cellType = lowerLeft.Mode ? 1 : 0;
+                cellType |= lowerRight.Mode ? 2 : 0;
+                cellType |= upperLeft.Mode ? 4 : 0;
+                cellType |= upperRight.Mode ? 8 : 0;
+
+                switch (cellType)
+                {
+                    case 0:
+                        break;
+                    default:
+                        AddVert(x, y, 0, ref lowerLeft.Base);
+                        AddVert(x, y + 0.5f, 0, ref lowerLeft.YEdge);
+                        AddVert(x + 0.5f, y, 0, ref lowerLeft.XEdge);
+                        break;
+                }
+            }
         }
 
-        List<int> triangles = mode ? trianglesOn : trianglesOff;
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            normals.Add(Vector3.forward);
+        }
+        mesh.vertices = vertices.ToArray();
+        mesh.normals = normals.ToArray();
+        mesh.triangles = triangles.ToArray();
+        filter.mesh = mesh;
+    }
 
-        int count = vertices.Count;
-        triangles.Add(count - 4);
-        triangles.Add(count - 3);
-        triangles.Add(count - 1);
-        triangles.Add(count - 3);
-        triangles.Add(count - 2);
-        triangles.Add(count - 1);
+    private void AddVert(float x, float y, float z, ref int index)
+    {
+        if (index == -1)
+        {
+            index = vertices.Count;
+            vertices.Add(new Vector3(x - XResolution / 2, y - YResolution / 2, z));
+        }
+        triangles.Add(index);
     }
 }
